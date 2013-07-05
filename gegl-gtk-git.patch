@@ -1,0 +1,1401 @@
+diff --git a/Makefile.am b/Makefile.am
+index 3307e47..01a767f 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -8,23 +8,13 @@ SUBDIRS=\
+ 	examples \
+ 	tests
+ 
+-pkgconfigdir = $(libdir)/pkgconfig
+-
+-if HAVE_GTK2
+-pkgconfig_DATA = gegl-gtk2-0.1.pc
+-else
+-pkgconfig_DATA = gegl-gtk3-0.1.pc
+-endif
+-
+ EXTRA_DIST = \
+ 	autogen.sh \
+ 	docs/reference/gegl-gtk-docs.xml.in \
+ 	docs/gtk-doc.make \
+-	gegl-gtk2-0.1.pc.in \
+-	gegl-gtk3-0.1.pc.in \
+ 	m4/introspection.m4
+ 
+-DISTCHECK_CONFIGURE_FLAGS = --disable-introspection --enable-gtk-doc
++DISTCHECK_CONFIGURE_FLAGS = --disable-introspection --enable-gtk-doc
+ 
+ DISTCLEANFILES =
+ 
+diff --git a/README b/README
+index b66e7f9..c19b182 100644
+--- a/README
++++ b/README
+@@ -5,7 +5,7 @@ Maintainer: Jon Nordby <jononor@gmail.com>
+ Homepage: http://www.gegl.org
+ Code: http://git.gnome.org/browse/gegl-gtk/
+ Bugtracker: http://bugs.gnome.org, product GEGL, component gegl-gtk
+-Mailinglist: http://blog.gmane.org/gmane.comp.video.gegl.devel
++Mailinglist: http://mail.gnome.org/mailman/listinfo/gegl-developer-list
+ 
+ == Installing ==
+ gegl-gtk uses an autotools build system. To install do:
+diff --git a/configure.ac b/configure.ac
+index b5b7c67..16cd1da 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -106,7 +106,7 @@ AC_SUBST(GTK3_REQUIRED_VERSION)
+ PACKAGE_NAME=gegl-gtk
+ AC_SUBST(PACKAGE_NAME)
+ 
+-GEGL_PLUGINS_DIR=`pkg-config gegl --variable=pluginsdir`
++GEGL_PLUGINS_DIR=`pkg-config gegl-0.2 --variable=pluginsdir`
+ if test -z $GEGL_PLUGINS_DIR; then
+ 	GEGL_PREFIX=`pkg-config gegl --variable=prefix`
+ 	GEGL_PLUGINS_DIR=$GEGL_PREFIX/lib/gegl-0.1
+@@ -116,7 +116,10 @@ AC_SUBST(GEGL_PLUGINS_DIR)
+ dnl ==========================================================================
+ 
+ AM_INIT_AUTOMAKE(no-define no-dist-gzip foreign)
+-AM_CONFIG_HEADER(config.h)
++AC_CONFIG_HEADERS(config.h)
++
++GEGL_GTK_SERVER=www.gegl.org
++AC_SUBST(GEGL_GTK_SERVER)
+ 
+ dnl Initialize libtool
+ AC_LIBTOOL_DLOPEN
+@@ -181,19 +184,19 @@ PKG_CHECK_MODULES(BABL, babl >= babl_required_version)
+ ######################################
+ # Checks for GEGL
+ ######################################
+-PKG_CHECK_MODULES(GEGL, gegl >= gegl_required_version)
++PKG_CHECK_MODULES(GEGL, gegl-0.2 >= gegl_required_version)
+ 
+ ######################################
+ # Checks for required deps
+ ######################################
+ AC_MSG_CHECKING([which gtk+ version to compile against])
+ AC_ARG_WITH([gtk],
+-	[AS_HELP_STRING([--with-gtk=2.0|3.0],[which gtk+ version to compile against (default: 2.0)])],
++	[AS_HELP_STRING([--with-gtk=2.0|3.0],[which gtk+ version to compile against (default: 3.0)])],
+ 	[case "$with_gtk" in
+ 	2.0|3.0) ;;
+ 	*) AC_MSG_ERROR([invalid gtk version specified]) ;;
+ 	esac],
+-	[with_gtk=2.0])
++	[with_gtk=3.0])
+ 	AC_MSG_RESULT([$with_gtk])
+ 
+ have_gtk="no"
+@@ -210,6 +213,8 @@ case "$with_gtk" in
+ 	*) ;;
+ esac
+ 
++m4_define([gegl_gtk_gtk_version], [$GEGL_GTK_GTK_VERSION])
++
+ AC_SUBST(GEGL_GTK_GTK_VERSION)
+ 
+ AM_CONDITIONAL(HAVE_GTK2, test "$have_gtk" = "2.0")
+@@ -248,6 +253,11 @@ fi
+ 
+ AM_CONDITIONAL(HAVE_INTROSPECTION, test "x$enable_introspection" = "xyes")
+ 
++if test "x$GIRDIR" = "x"; then
++  GIRDIR=$(datadir)/vala/vapi
++fi
++AC_SUBST([GIRDIR])
++
+ ########################
+ # Check Vala
+ ########################
+@@ -269,6 +279,13 @@ fi
+ have_vala=$have_vapigen
+ AM_CONDITIONAL(HAVE_VALA, test "$have_vala" = "yes")
+ 
++if test "x$VAPIDIR" = "x"; then
++  VAPIDIR=$(datadir)/vala/vapi
++fi
++AC_SUBST([VAPIDIR])
++
++# `$PKG_CONFIG --variable=vapidir $valapkg`
++
+ ######################################
+ # Checks for gtk-doc and docbook-tools
+ ######################################
+@@ -318,17 +335,25 @@ if test -z "${MAINTAINER_MODE_TRUE}"; then
+    GTK_CFLAGS="-DG_DISABLE_DEPRECATED -DGDK_DISABLE_DEPRECATED -DGTK_DISABLE_DEPRECATED $GTK_CFLAGS"
+ fi
+ 
++
++# Files with versions in their names
++AC_CONFIG_FILES(
++gegl-gtk/GeglGtk\
++gegl_gtk_gtk_version-gegl_gtk_api_version.metadata:gegl-gtk/GeglGtk.metadata.in
++gegl-gtk/gegl-gtk2-gegl_gtk_api_version.pc:gegl-gtk/gegl-gtk2.pc.in
++gegl-gtk/gegl-gtk3-gegl_gtk_api_version.pc:gegl-gtk/gegl-gtk3.pc.in
++)
++
+ AC_OUTPUT([
+ Makefile
+ gegl-gtk/Makefile
+ operations/Makefile
+ examples/Makefile
+ examples/c/Makefile
++examples/vala/Makefile
+ tests/Makefile
+ docs/reference/Makefile
+ docs/reference/gegl-gtk-docs.xml
+-gegl-gtk2-0.1.pc
+-gegl-gtk3-0.1.pc
+ ])
+ 
+ dnl Print a summary of features enabled/disabled:
+#diff --git a/examples/.gitignore b/examples/.gitignore
+#index 264e3fe..944a61e 100644
+#--- a/examples/.gitignore
+#+++ b/examples/.gitignore
+#@@ -1,3 +1,4 @@
+# gegl-gtk-paint
+# gegl-gtk-basic
+# gegl-gtk-display-op
+#+gegl-gtk-warp
+diff --git a/examples/Makefile.am b/examples/Makefile.am
+index d080bd3..7e08a39 100644
+--- a/examples/Makefile.am
++++ b/examples/Makefile.am
+@@ -1,2 +1,8 @@
+ 
+ SUBDIRS = c
++
++if HAVE_INTROSPECTION
++if HAVE_VALA
++SUBDIRS += vala
++endif # HAVE_VALA
++endif # HAVE_INTROSPECTION
+#diff --git a/examples/c/.gitignore b/examples/c/.gitignore
+#index 54e0920..81c2fa4 100644
+#--- a/examples/c/.gitignore
+#+++ b/examples/c/.gitignore
+#@@ -1 +1,2 @@
+# gegl-gtk-scroll
+#+gegl-gtk-transform
+diff --git a/examples/c/gegl-gtk-basic.c b/examples/c/gegl-gtk-basic.c
+index 1c5c487..0188f57 100644
+--- a/examples/c/gegl-gtk-basic.c
++++ b/examples/c/gegl-gtk-basic.c
+@@ -32,7 +32,6 @@ main(gint    argc,
+     GeglNode *graph = NULL;
+     GeglNode *node = NULL;
+ 
+-    g_thread_init(NULL);
+     gtk_init(&argc, &argv);
+     gegl_init(&argc, &argv);
+ 
+diff --git a/examples/c/gegl-gtk-display-op.c b/examples/c/gegl-gtk-display-op.c
+index 2c0ff72..12aa0d9 100644
+--- a/examples/c/gegl-gtk-display-op.c
++++ b/examples/c/gegl-gtk-display-op.c
+@@ -29,7 +29,6 @@ main(gint    argc,
+     GeglNode *node = NULL;
+     GeglNode *display = NULL;
+ 
+-    g_thread_init(NULL);
+     gegl_init(&argc, &argv);
+ 
+     if (argc != 2) {
+diff --git a/examples/c/gegl-gtk-paint.c b/examples/c/gegl-gtk-paint.c
+index f71a9b7..eaab947 100644
+--- a/examples/c/gegl-gtk-paint.c
++++ b/examples/c/gegl-gtk-paint.c
+@@ -133,7 +133,7 @@ static gboolean paint_release(GtkWidget      *widget,
+         processor = gegl_node_new_processor(writebuf, &roi);
+         while (gegl_processor_work(processor, NULL)) ;
+ 
+-        gegl_processor_destroy(processor);
++        g_object_unref(processor);
+         g_object_unref(writebuf);
+ 
+         gegl_node_link_many(top, out, NULL);
+@@ -176,7 +176,6 @@ gint
+ main(gint    argc,
+      gchar **argv)
+ {
+-    g_thread_init(NULL);
+     gtk_init(&argc, &argv);
+     gegl_init(&argc, &argv);
+ 
+@@ -241,7 +240,7 @@ main(gint    argc,
+ 
+     gtk_main();
+     g_object_unref(gegl);
+-    gegl_buffer_destroy(buffer);
++    g_object_unref(buffer);
+ 
+     gegl_exit();
+     return 0;
+diff --git a/examples/c/gegl-gtk-scroll.c b/examples/c/gegl-gtk-scroll.c
+index 367dd56..65f9620 100644
+--- a/examples/c/gegl-gtk-scroll.c
++++ b/examples/c/gegl-gtk-scroll.c
+@@ -33,7 +33,6 @@ main(gint    argc,
+     GeglNode *graph = NULL;
+     GeglNode *node = NULL;
+ 
+-    g_thread_init(NULL);
+     gtk_init(&argc, &argv);
+     gegl_init(&argc, &argv);
+ 
+diff --git a/examples/c/gegl-gtk-transform.c b/examples/c/gegl-gtk-transform.c
+new file mode 100644
+index 0000000..3e52eed
+--- /dev/null
++++ b/examples/c/gegl-gtk-transform.c
+@@ -0,0 +1,99 @@
++/* This file is part of GEGL-GTK
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, see <http://www.gnu.org/licenses/>.
++ *
++ * Copyright (C) 2011 Jon Nordby <jononor@gmail.com>
++ */
++
++#include <string.h>
++#include <glib.h>
++#include <gegl.h>
++#include <gtk/gtk.h>
++#include <gegl-gtk.h>
++
++static gboolean motion_event (GtkWidget      *widget,
++                              GdkEventMotion *event,
++			      GeglGtkView    *view)
++{
++
++  static gboolean has_last_pos = FALSE;
++  static gfloat last_x, last_y;
++
++  if (event->state & GDK_BUTTON1_MASK) {
++    if (has_last_pos) { 
++      
++      g_object_set (view, "x", -last_x, "y", -last_y, NULL);
++    }
++
++    last_x = event->x;
++    last_y = event->y;
++    has_last_pos = TRUE;
++  }
++
++
++  return FALSE;
++}
++
++gint
++main (gint    argc,
++      gchar **argv)
++{
++  GtkWidget *window = NULL;
++  GtkWidget *view = NULL;
++  GtkWidget *eventbox = NULL;
++  GeglNode *graph = NULL;
++  GeglNode *node = NULL;
++
++  gtk_init (&argc, &argv);
++  gegl_init (&argc, &argv);
++
++  if (argc != 2) {
++    g_print ("Usage: %s <FILENAME>\n", argv[0]);
++    exit(1);
++  }
++
++  /* Build graph that loads an image */
++  graph = gegl_node_new ();
++  node = gegl_node_new_child (graph,
++    "operation", "gegl:load", 
++    "path", argv[1], NULL);
++
++  gegl_node_process (node);
++
++  /* Setup */
++  window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
++  gtk_window_set_title (GTK_WINDOW (window), "GEGL-GTK transformation example");
++
++  eventbox = gtk_event_box_new ();
++  view = g_object_new (GEGL_GTK_TYPE_VIEW, "node", node, NULL);
++
++  g_signal_connect (G_OBJECT (eventbox), "motion-notify-event",
++                    (GCallback) motion_event, (gpointer)view);
++
++  gtk_container_add (GTK_CONTAINER (eventbox), view);
++  gtk_container_add (GTK_CONTAINER (window), eventbox);
++
++  g_signal_connect (G_OBJECT (window), "delete-event",
++                    G_CALLBACK (gtk_main_quit), window);
++  gtk_widget_show_all (window);
++
++  /* Run */
++  gtk_main ();
++
++  /* Cleanup */
++  g_object_unref (graph);
++  gtk_widget_destroy (window);
++  gegl_exit ();
++  return 0;
++}
+diff --git a/examples/c/gegl-gtk-warp.c b/examples/c/gegl-gtk-warp.c
+new file mode 100644
+index 0000000..1ec1d31
+--- /dev/null
++++ b/examples/c/gegl-gtk-warp.c
+@@ -0,0 +1,214 @@
++/* This file is part of GEGL-GTK
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, see <http://www.gnu.org/licenses/>.
++ *
++ * Copyright (C) 2011 Michael Muré <batolettre@gmail.com>
++ */
++
++#include <string.h>
++#include <glib.h>
++#include <gegl.h>
++#include <gtk/gtk.h>
++#include <gegl-gtk.h>
++
++/* gegl */
++/* typedef enum
++{
++  GEGL_WARP_BEHAVIOR_MOVE,
++  GEGL_WARP_BEHAVIOR_GROW,
++  GEGL_WARP_BEHAVIOR_SHRINK,
++  GEGL_WARP_BEHAVIOR_SWIRL_CW,
++  GEGL_WARP_BEHAVIOR_SWIRL_CCW,
++  GEGL_WARP_BEHAVIOR_ERASE,
++  GEGL_WARP_BEHAVIOR_SMOOTH
++} GeglWarpBehavior; */
++
++/* Tool */
++static gdouble         cursor_x; /* Hold the cursor x position */
++static gdouble         cursor_y; /* Hold the cursor y position */
++
++static GeglBuffer     *coords_buffer; /* Gegl buffer where coordinates are stored */
++
++static GeglNode       *graph; /* Top level GeglNode. All others node are child of it */
++static GeglNode       *read_coords_buffer_node; /* Gegl node that read in the coords buffer */
++static GeglNode       *render_node; /* Gegl node to render the transformation */
++
++static GeglPath       *current_stroke;
++static guint           stroke_timer;
++
++#define STROKE_PERIOD 100
++
++/* Tool options */
++static gdouble          strength = 100;
++static gdouble          size = 40;
++static gdouble          hardness = 0.5;
++static GeglWarpBehavior behavior = GEGL_WARP_BEHAVIOR_MOVE;
++
++/* gegl-gtk stuff */
++GtkWidget               *window;
++GtkWidget               *view;
++GtkWidget               *eventbox;
++
++static GeglRectangle     rect; /* size for the view/window */
++static GeglBuffer       *original_buffer = NULL; /* image to be warped */
++static GeglNode         *readbuf; /* node to read this image */
++
++static gboolean
++add_event_timer (gpointer data)
++{
++  gegl_path_append (current_stroke,
++                    'L', cursor_x, cursor_y);
++  return TRUE;
++}
++
++static void
++add_op ()
++{
++  GeglNode *new_op, *last_op;
++
++  new_op = gegl_node_new_child (graph,
++                                "operation", "gegl:warp",
++                                "behavior", behavior,
++                                "strength", strength,
++                                "size", size,
++                                "hardness", hardness,
++                                "stroke", current_stroke,
++                                NULL);
++
++  last_op = gegl_node_get_producer (render_node, "aux", NULL);
++
++  gegl_node_disconnect (render_node, "aux");
++
++  gegl_node_connect_to (last_op, "output", new_op, "input");
++  gegl_node_connect_to (new_op, "output", render_node, "aux");
++}
++
++static gboolean paint_press (GtkWidget      *widget,
++                             GdkEventButton *event)
++{
++  if (current_stroke)
++    g_object_unref (current_stroke);
++
++  current_stroke = gegl_path_new ();
++  gegl_path_append (current_stroke,
++                    'M', event->x, event->y);
++
++  cursor_x = event->x;
++  cursor_y = event->y;
++
++  add_op ();
++
++  stroke_timer = g_timeout_add (STROKE_PERIOD, add_event_timer, NULL);
++  return TRUE;
++}
++
++
++static gboolean paint_motion (GtkWidget      *widget,
++                              GdkEventMotion *event)
++{
++  cursor_x = event->x;
++  cursor_y = event->y;
++
++  return FALSE;
++}
++
++
++static gboolean paint_release (GtkWidget      *widget,
++                               GdkEventButton *event)
++{
++  g_source_remove (stroke_timer);
++
++  return TRUE;
++}
++
++static void
++create_graph ()
++{
++  printf ("Initialize coordinate buffer (%d,%d) at %d,%d\n", rect.width, rect.height, rect.x, rect.y);
++  coords_buffer = gegl_buffer_new (&rect, babl_format_n (babl_type ("float"), 2));
++
++  graph = gegl_node_new ();
++
++  readbuf = gegl_node_new_child (graph,
++                                 "operation", "gegl:buffer-source",
++                                 "buffer",    original_buffer,
++                                 NULL);
++
++  read_coords_buffer_node = gegl_node_new_child (graph,
++                                                 "operation", "gegl:buffer-source",
++                                                 "buffer",    coords_buffer,
++                                                 NULL);
++
++  render_node = gegl_node_new_child (graph,
++                                     "operation", "gegl:map-relative",
++                                     NULL);
++
++
++  gegl_node_connect_to (readbuf, "output",
++                        render_node, "input");
++
++  gegl_node_connect_to (read_coords_buffer_node, "output",
++                        render_node, "aux");
++}
++
++gint
++main (gint    argc,
++      gchar **argv)
++{
++  if (argv[1] == NULL)
++    {
++      printf("usage: %s filename.gegl\n", argv[0]);
++      printf("filename.gegl must be a Gegl buffer file, for instance created with the 2geglbuffer example from Gegl.\n");
++      return 0;
++    }
++
++  gtk_init (&argc, &argv);
++  gegl_init (&argc, &argv);
++
++  window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
++  gtk_window_set_title (GTK_WINDOW (window), "Warp example");
++
++  original_buffer = gegl_buffer_open (argv[1]);
++  rect = *gegl_buffer_get_extent(original_buffer);
++
++  create_graph ();
++
++  view = g_object_new (GEGL_GTK_TYPE_VIEW, "node", render_node, NULL);
++
++  eventbox = gtk_event_box_new ();
++
++  g_signal_connect (G_OBJECT (eventbox), "motion-notify-event",
++                    (GCallback) paint_motion, NULL);
++  g_signal_connect (G_OBJECT (eventbox), "button-press-event",
++                    (GCallback) paint_press, NULL);
++  g_signal_connect (G_OBJECT (eventbox), "button-release-event",
++                    (GCallback) paint_release, NULL);
++  gtk_widget_add_events (eventbox, GDK_BUTTON_RELEASE_MASK);
++
++  gtk_container_add (GTK_CONTAINER (eventbox), view);
++  gtk_container_add (GTK_CONTAINER (window), eventbox);
++  gtk_widget_set_size_request (view, rect.width, rect.height);
++
++  g_signal_connect (G_OBJECT (window), "delete-event",
++                    G_CALLBACK (gtk_main_quit), window);
++  gtk_widget_show_all (window);
++
++  gtk_main ();
++  g_object_unref (graph);
++  g_object_unref (original_buffer);
++  g_object_unref (coords_buffer);
++
++  gegl_exit ();
++  return 0;
++}
+diff --git a/examples/vala/Makefile.am b/examples/vala/Makefile.am
+new file mode 100644
+index 0000000..1392955
+--- /dev/null
++++ b/examples/vala/Makefile.am
+@@ -0,0 +1,19 @@
++
++if HAVE_VALA
++
++VALA_FILES = $(wildcard $(srcdir)/*.vala)
++EXTRA_DIST = $(VALA_FILES)
++bins   = $(subst $(srcdir)/,,$(VALA_FILES:.vala=))
++
++vapi_dir = ../../gegl-gtk
++vala_pkg = gegl-gtk@GEGL_GTK_GTK_VERSION@-@GEGL_GTK_API_VERSION@
++
++all-local: $(bins)
++
++gegl-gtk-basic: gegl-gtk-basic.vala $(vapi_dir)/$(vala_pkg).vapi
++	valac --pkg $(vala_pkg) --vapidir=@VAPIDIR@ --vapidir=$(vapi_dir) -o $@ $< 
++
++clean-local:
++	rm -f $(bins)
++
++endif # HAVE_VALA
+diff --git a/examples/vala/gegl-gtk-basic.vala b/examples/vala/gegl-gtk-basic.vala
+new file mode 100644
+index 0000000..1a9882f
+--- /dev/null
++++ b/examples/vala/gegl-gtk-basic.vala
+@@ -0,0 +1,28 @@
++
++class Examples.Basic : GLib.Object {
++
++    public static int main(string[] args) {
++        Gtk.init(ref args);
++        Gegl.init(0, "");
++
++        var graph = new Gegl.Node();
++        var node = graph.create_child("gegl:load");
++        node.set_property("path", args[1]);
++
++        var window = new Gtk.Window();
++        window.title = "GEGL GTK Basic Vala example";
++        window.set_default_size(300, 300);
++        window.destroy.connect(Gtk.main_quit);
++
++        var node_view = new GeglGtk.View();
++        node_view.set_node(node);
++
++        window.add(node_view);
++        window.show_all();
++
++        Gtk.main();
++        Gegl.exit();
++        return 0;
++    }
++}
++
+#diff --git a/gegl-gtk/.gitignore b/gegl-gtk/.gitignore
+#index 95b99f3..9324c98 100644
+#--- a/gegl-gtk/.gitignore
+#+++ b/gegl-gtk/.gitignore
+#@@ -1,5 +1,6 @@
+# *.gir
+# *.typelib
+# *.vapi
+#+*.metadata
+# gegl-gtk-enums.c
+# gegl-gtk-marshal.*
+diff --git a/gegl-gtk/GeglGtk.metadata.in b/gegl-gtk/GeglGtk.metadata.in
+new file mode 100644
+index 0000000..7630a9e
+--- /dev/null
++++ b/gegl-gtk/GeglGtk.metadata.in
+@@ -0,0 +1,2 @@
++GeglGtk2 cheader_filename="gegl-gtk.h"
++GeglGtk3 cheader_filename="gegl-gtk.h"
+diff --git a/gegl-gtk/Makefile.am b/gegl-gtk/Makefile.am
+index 426acd8..d45b163 100644
+--- a/gegl-gtk/Makefile.am
++++ b/gegl-gtk/Makefile.am
+@@ -1,3 +1,5 @@
++
++### Library
+ CLEANFILES = 
+ EXTRA_DIST =
+ 
+@@ -41,6 +43,19 @@ gegl-gtk-marshal.c: gegl-gtk-marshal.h
+ 
+ EXTRA_DIST += gegl-gtk-marshal.list
+ 
++### pkg-config
++pkgconfigdir = $(libdir)/pkgconfig
++
++if HAVE_GTK2
++pkgconfig_DATA = gegl-gtk2-0.1.pc
++else
++pkgconfig_DATA = gegl-gtk3-0.1.pc
++endif
++
++EXTRA_DIST += \
++	gegl-gtk2.pc.in \
++	gegl-gtk3.pc.in
++
+ ### GObject introspection
+ -include $(INTROSPECTION_MAKEFILE)
+ 
+@@ -56,7 +71,7 @@ GeglGtk@GEGL_GTK_GTK_VERSION@_0_1_gir_CFLAGS = $(INCLUDES)
+ GeglGtk@GEGL_GTK_GTK_VERSION@_0_1_gir_FILES = $(sources) $(headers)
+ GeglGtk@GEGL_GTK_GTK_VERSION@_0_1_gir_LIBS = libgegl-gtk@GEGL_GTK_GTK_VERSION@-@GEGL_GTK_API_VERSION@.la
+ 
+-GeglGtk@GEGL_GTK_GTK_VERSION@_0_1_gir_INCLUDES = Gtk-@GEGL_GTK_GTK_VERSION@.0 Gegl-0.1 Babl-0.1
++GeglGtk@GEGL_GTK_GTK_VERSION@_0_1_gir_INCLUDES = Gtk-@GEGL_GTK_GTK_VERSION@.0 Gegl-0.2
+ 
+ INTROSPECTION_GIRS += GeglGtk@GEGL_GTK_GTK_VERSION@-@GEGL_GTK_API_VERSION@.gir
+ 
+@@ -73,11 +88,12 @@ if HAVE_VALA
+ gegl-gtk@GEGL_GTK_GTK_VERSION@-@GEGL_GTK_API_VERSION@.vapi: \
+ 	GeglGtk@GEGL_GTK_GTK_VERSION@-@GEGL_GTK_API_VERSION@.gir
+ 
+-	$(VAPIGEN) --pkg gtk+-@GEGL_GTK_GTK_VERSION@.0 \
++	$(VAPIGEN) --pkg gtk+-@GEGL_GTK_GTK_VERSION@.0 --pkg Gegl-0.2 \
+ 	--library=gegl-gtk@GEGL_GTK_GTK_VERSION@-@GEGL_GTK_API_VERSION@ \
++	--vapidir=@VAPIDIR@ --girdir=@GIRDIR@ \
+ 	GeglGtk@GEGL_GTK_GTK_VERSION@-@GEGL_GTK_API_VERSION@.gir
+ 
+-vapidir=$(datadir)/vala/vapi
++vapidir=@VAPIDIR@
+ vapi_DATA = \
+ 	gegl-gtk@GEGL_GTK_GTK_VERSION@-@GEGL_GTK_API_VERSION@.vapi \
+ 	gegl-gtk@GEGL_GTK_GTK_VERSION@-@GEGL_GTK_API_VERSION@.deps
+@@ -91,3 +107,6 @@ endif # HAVE_INTROSPECTION
+ EXTRA_DIST += \
+ 	gegl-gtk2-@GEGL_GTK_API_VERSION@.deps \
+ 	gegl-gtk3-@GEGL_GTK_API_VERSION@.deps
++
++CLEANFILES += \
++	GeglGtk@GEGL_GTK_GTK_VERSION@-@GEGL_GTK_API_VERSION@.metadata
+diff --git a/gegl-gtk/gegl-gtk-view.c b/gegl-gtk/gegl-gtk-view.c
+index dd48323..e0007c1 100644
+--- a/gegl-gtk/gegl-gtk-view.c
++++ b/gegl-gtk/gegl-gtk-view.c
+@@ -462,6 +462,14 @@ gegl_gtk_view_new()
+     return GEGL_GTK_VIEW(g_object_new(GEGL_GTK_TYPE_VIEW, NULL));
+ }
+ 
++GeglGtkView *
++gegl_gtk_view_new_for_buffer(GeglBuffer *buffer)
++{
++    GeglNode *node = gegl_node("gegl:buffer-source",
++                     "buffer", buffer, NULL);
++    return gegl_gtk_view_new_for_node(node);
++}
++
+ /**
+  * gegl_gtk_view_new_for_node:
+  * @node: The #GeglNode to display
+diff --git a/gegl-gtk/gegl-gtk-view.h b/gegl-gtk/gegl-gtk-view.h
+index 4642f6d..d6611c7 100644
+--- a/gegl-gtk/gegl-gtk-view.h
++++ b/gegl-gtk/gegl-gtk-view.h
+@@ -55,6 +55,7 @@ GType           gegl_gtk_view_get_type(void) G_GNUC_CONST;
+ 
+ GeglGtkView *gegl_gtk_view_new(void);
+ GeglGtkView *gegl_gtk_view_new_for_node(GeglNode *node);
++GeglGtkView *gegl_gtk_view_new_for_buffer(GeglBuffer *buffer);
+ 
+ void gegl_gtk_view_set_node(GeglGtkView *self, GeglNode *node);
+ GeglNode *gegl_gtk_view_get_node(GeglGtkView *self);
+diff --git a/gegl-gtk/gegl-gtk.h b/gegl-gtk/gegl-gtk.h
+index 49d5b6b..b18d387 100644
+--- a/gegl-gtk/gegl-gtk.h
++++ b/gegl-gtk/gegl-gtk.h
+@@ -9,11 +9,20 @@
+  * For building GEGL-GTK, please refer to the README file included
+  * in the source code tarball.
+  *
+- * GEGL-GTK supports both GTK+ 2 and 3, and
+- * can be used directly as a C library, or in languages
+- * with bindings provided by GObject Introspection.
++ * GEGL-GTK supports both GTK+ 2 and 3. It can be used directly as a C library,
++ * or in languages with bindings provided by GObject Introspection.
+  *
+- * For usage examples, see http://git.gnome.org/browse/gegl-gtk/tree/examples
++ * GEGL-GTK is licensed under the GNU LGPL v3+, and maintained by Jon Nordby
++ *
++ * Homepage: <ulink url="http://www.gegl.org/gegl-gtk">http://www.gegl.org/gegl-gtk</ulink>
++ *
++ * Code: <ulink url="http://git.gnome.org/browse/gegl-gtk/">http://git.gnome.org/browse/gegl-gtk/</ulink>
++ *
++ * Bugtracker: <ulink url="http://bugs.gnome.org">http://bugs.gnome.org</ulink>, product GEGL, component gegl-gtk
++ *
++ * Mailinglist: <ulink url="http://mail.gnome.org/mailman/listinfo/gegl-developer-list">gegl-developer@lists.gnome.org</ulink>
++ *
++ * For usage examples, see <ulink url="http://git.gnome.org/browse/gegl-gtk/tree/examples">http://git.gnome.org/browse/gegl-gtk/tree/examples</ulink>
+  *
+  * GEGL-GTK provides one class: #GeglGtkView
+  **/
+diff --git a/gegl-gtk/gegl-gtk2-0.1.deps b/gegl-gtk/gegl-gtk2-0.1.deps
+index d6fc3e2..f2ff21a 100644
+--- a/gegl-gtk/gegl-gtk2-0.1.deps
++++ b/gegl-gtk/gegl-gtk2-0.1.deps
+@@ -1,4 +1,4 @@
+-gegl-0.1
++gegl-0.2
+ atk
+ gtk+-2.0
+ 
+diff --git a/gegl-gtk/gegl-gtk2.pc.in b/gegl-gtk/gegl-gtk2.pc.in
+new file mode 100644
+index 0000000..80e288c
+--- /dev/null
++++ b/gegl-gtk/gegl-gtk2.pc.in
+@@ -0,0 +1,11 @@
++prefix=@prefix@
++exec_prefix=@exec_prefix@
++libdir=@libdir@
++includedir=@includedir@
++
++Name: GEGL-GTK
++Description: GTK+ UI convenience library for GEGL
++Version: @GEGL_GTK_REAL_VERSION@
++Requires: gtk+-2.0 gegl-0.2 babl
++Libs: -L${libdir} -l@PACKAGE_NAME@2-@GEGL_GTK_API_VERSION@
++Cflags: -I${includedir}/@PACKAGE_NAME@2-@GEGL_GTK_API_VERSION@
+diff --git a/gegl-gtk/gegl-gtk3-0.1.deps b/gegl-gtk/gegl-gtk3-0.1.deps
+index 486d1eb..81b00cf 100644
+--- a/gegl-gtk/gegl-gtk3-0.1.deps
++++ b/gegl-gtk/gegl-gtk3-0.1.deps
+@@ -1,4 +1,4 @@
+-gegl-0.1
++gegl-0.2
+ atk
+ gtk+-3.0
+ 
+diff --git a/gegl-gtk/gegl-gtk3.pc.in b/gegl-gtk/gegl-gtk3.pc.in
+new file mode 100644
+index 0000000..d077ee1
+--- /dev/null
++++ b/gegl-gtk/gegl-gtk3.pc.in
+@@ -0,0 +1,11 @@
++prefix=@prefix@
++exec_prefix=@exec_prefix@
++libdir=@libdir@
++includedir=@includedir@
++
++Name: GEGL-GTK
++Description: GTK+ UI convenience library for GEGL
++Version: @GEGL_GTK_REAL_VERSION@
++Requires: gtk+-3.0 gegl-0.2 babl
++Libs: -L${libdir} -l@PACKAGE_NAME@3-@GEGL_GTK_API_VERSION@
++Cflags: -I${includedir}/@PACKAGE_NAME@3-@GEGL_GTK_API_VERSION@
+diff --git a/gegl-gtk/internal/view-helper.c b/gegl-gtk/internal/view-helper.c
+index 71587cb..e6637c2 100644
+--- a/gegl-gtk/internal/view-helper.c
++++ b/gegl-gtk/internal/view-helper.c
+@@ -34,8 +34,14 @@ enum {
+ 
+ static guint view_helper_signals[N_SIGNALS] = { 0 };
+ 
++
+ static void
+ finalize(GObject *gobject);
++void
++trigger_processing(ViewHelper *self, GeglRectangle roi);
++void
++trigger_redraw(ViewHelper *self, GeglRectangle *redraw_rect);
++
+ 
+ static void
+ view_helper_class_init(ViewHelperClass *klass)
+@@ -68,7 +74,6 @@ view_helper_class_init(ViewHelperClass *klass)
+ static void
+ view_helper_init(ViewHelper *self)
+ {
+-    GeglRectangle invalid_rect = {0, 0, -1, -1};
+     GdkRectangle invalid_gdkrect = {0, 0, -1, -1};
+ 
+     self->node        = NULL;
+@@ -76,9 +81,12 @@ view_helper_init(ViewHelper *self)
+     self->y           = 0;
+     self->scale       = 1.0;
+     self->autoscale_policy = GEGL_GTK_VIEW_AUTOSCALE_CONTENT;
++    self->block = FALSE;
+ 
+     self->monitor_id  = 0;
+-    self->processor   = NULL;
++    self->processor = NULL;
++    self->processing_queue = g_queue_new();
++    self->currently_processed_rect = NULL;
+ 
+     self->widget_allocation = invalid_gdkrect;
+ }
+@@ -98,6 +106,12 @@ finalize(GObject *gobject)
+ 
+     if (self->processor)
+         g_object_unref(self->processor);
++
++    g_queue_free_full(self->processing_queue, g_free);
++
++    if (self->currently_processed_rect) {
++        g_free(self->currently_processed_rect);
++    }
+ }
+ 
+ /* Transform a rectangle from model to view coordinates. */
+@@ -106,8 +120,8 @@ model_rect_to_view_rect(ViewHelper *self, GeglRectangle *rect)
+ {
+     GeglRectangle temp;
+ 
+-    temp.x = self->scale * (rect->x) - rect->x;
+-    temp.y = self->scale * (rect->y) - rect->y;
++    temp.x = self->scale * (rect->x) - self->x;
++    temp.y = self->scale * (rect->y) - self->y;
+     temp.width = ceil(self->scale * rect->width);
+     temp.height = ceil(self->scale * rect->height);
+ 
+@@ -148,21 +162,45 @@ invalidated_event(GeglNode      *node,
+                   GeglRectangle *rect,
+                   ViewHelper    *self)
+ {
+-    view_helper_repaint(self);
++    trigger_processing(self, *rect);
+ }
+ 
+ static gboolean
+ task_monitor(ViewHelper *self)
+ {
+-    if (self->processor == NULL)
++    if (!self->processor || !self->node) {
+         return FALSE;
++    }
++
++    // PERFORMANCE: combine all the rects added to the queue during a single
++    // iteration of the main loop somehow
++
++    if (!self->currently_processed_rect) {
++
++        if (g_queue_is_empty(self->processing_queue)) {
++            // Unregister worker
++            self->monitor_id = 0;
++            return FALSE;
++        }
++        else {
++            // Fetch next rect to process
++            self->currently_processed_rect = (GeglRectangle *)g_queue_pop_tail(self->processing_queue);
++            g_assert(self->currently_processed_rect);
++            gegl_processor_set_rectangle(self->processor, self->currently_processed_rect);
++        }
++    }
+ 
+-    if (gegl_processor_work(self->processor, NULL))
+-        return TRUE;
++    gboolean processing_done = !gegl_processor_work(self->processor, NULL);
+ 
+-    self->monitor_id = 0;
++    if (processing_done) {
++        // Go to next region
++        if (self->currently_processed_rect) {
++            g_free(self->currently_processed_rect);
++        }
++        self->currently_processed_rect = NULL;
++    }
+ 
+-    return FALSE;
++    return TRUE;
+ }
+ 
+ 
+@@ -182,8 +220,7 @@ computed_event(GeglNode      *node,
+     GeglRectangle redraw_rect = *rect;
+     model_rect_to_view_rect(self, &redraw_rect);
+ 
+-    g_signal_emit(self, view_helper_signals[SIGNAL_REDRAW_NEEDED],
+-                  0, &redraw_rect, NULL);
++    trigger_redraw(self, &redraw_rect);
+ }
+ 
+ ViewHelper *
+@@ -240,18 +277,23 @@ view_helper_set_allocation(ViewHelper *self, GdkRectangle *allocation)
+ 
+ /* Trigger processing of the GeglNode */
+ void
+-view_helper_repaint(ViewHelper *self)
++trigger_processing(ViewHelper *self, GeglRectangle roi)
+ {
+-    GeglRectangle    roi;
++    //GeglRectangle    roi;
++
++    // PERFORMANCE: determine the area that the view widget is interested in,
++    // and calculate the intersection with the invalidated rect
++    // and only pass this value as the ROI
++    // Would then also have to follow changes in view transformation
+ 
+     if (!self->node)
+         return;
+ 
+-    roi.x = self->x / self->scale;
+-    roi.y = self->y / self->scale;
++//    roi.x = self->x / self->scale;
++//    roi.y = self->y / self->scale;
+ 
+-    roi.width = ceil(self->widget_allocation.width / self->scale + 1);
+-    roi.height = ceil(self->widget_allocation.height / self->scale + 1);
++//    roi.width = ceil(self->widget_allocation.width / self->scale + 1);
++//    roi.height = ceil(self->widget_allocation.height / self->scale + 1);
+ 
+     if (self->monitor_id == 0) {
+         self->monitor_id = g_idle_add_full(G_PRIORITY_LOW,
+@@ -259,18 +301,25 @@ view_helper_repaint(ViewHelper *self)
+                                            NULL);
+     }
+ 
+-    if (self->processor)
+-        gegl_processor_set_rectangle(self->processor, &roi);
+-    else
+-        self->processor = gegl_node_new_processor(self->node, &roi);
++    // Add the invalidated region to the dirty
++    GeglRectangle *rect = g_new(GeglRectangle, 1);
++    rect->x = roi.x;
++    rect->y = roi.y;
++    rect->width = roi.width;
++    rect->height = roi.height;
++    g_queue_push_head(self->processing_queue, rect);
+ }
+ 
+ void
+-invalidate(ViewHelper *self)
++trigger_redraw(ViewHelper *self, GeglRectangle *redraw_rect)
+ {
+-    GeglRectangle redraw_rect = {0, 0, -1, -1}; /* Indicates full redraw */
++    if (!redraw_rect) {
++        GeglRectangle invalid_rect = {0, 0, -1, -1}; /* Indicates full redraw */
++        redraw_rect = &invalid_rect;
++    }
++
+     g_signal_emit(self, view_helper_signals[SIGNAL_REDRAW_NEEDED],
+-                  0, &redraw_rect, NULL);
++                  0, redraw_rect, NULL);
+ }
+ 
+ void
+@@ -293,8 +342,14 @@ view_helper_set_node(ViewHelper *self, GeglNode *node)
+                                 G_CALLBACK(invalidated_event),
+                                 self, 0);
+ 
++        if (self->processor)
++            g_object_unref(self->processor);
++
++        GeglRectangle bbox = gegl_node_get_bounding_box(self->node);
++        self->processor = gegl_node_new_processor(self->node, &bbox);
++
+         update_autoscale(self);
+-        invalidate(self);
++        trigger_processing(self, bbox);
+ 
+     } else
+         self->node = NULL;
+@@ -314,7 +369,7 @@ view_helper_set_scale(ViewHelper *self, float scale)
+ 
+     self->scale = scale;
+     update_autoscale(self);
+-    invalidate(self);
++    trigger_redraw(self, NULL);
+ }
+ 
+ float
+@@ -331,7 +386,7 @@ view_helper_set_x(ViewHelper *self, float x)
+ 
+     self->x = x;
+     update_autoscale(self);
+-    invalidate(self);
++    trigger_redraw(self, NULL);
+ }
+ 
+ float
+@@ -348,7 +403,7 @@ view_helper_set_y(ViewHelper *self, float y)
+ 
+     self->y = y;
+     update_autoscale(self);
+-    invalidate(self);
++    trigger_redraw(self, NULL);
+ }
+ 
+ float
+@@ -366,7 +421,7 @@ void view_helper_get_transformation(ViewHelper *self, GeglMatrix3 *matrix)
+      * GeglMatrix3 changed from float[3][3] to
+      * struct with a float[3][3] coeff member */
+ 
+-#if GEGL_MINOR_VERSION == 1 && GEGL_MICRO_VERSION >= 7
++#if GEGL_MINOR_VERSION == 1 && GEGL_MICRO_VERSION >= 7 || GEGL_MINOR_VERSION >= 2
+     matrix->coeff [0][0] = self->scale; /* xx */
+     matrix->coeff [0][1] = 0.0; /* xy */
+     matrix->coeff [0][2] = -self->x; /* x0 */
+diff --git a/gegl-gtk/internal/view-helper.h b/gegl-gtk/internal/view-helper.h
+index 2c49299..022ac5e 100644
+--- a/gegl-gtk/internal/view-helper.h
++++ b/gegl-gtk/internal/view-helper.h
+@@ -50,6 +50,9 @@ struct _ViewHelper {
+ 
+     guint          monitor_id;
+     GeglProcessor *processor;
++    GQueue        *processing_queue; /* Queue of rectangles that needs to be processed */
++    GeglRectangle *currently_processed_rect;
++
+     GdkRectangle   widget_allocation; /* The allocated size of the widget */
+ };
+ 
+@@ -61,8 +64,7 @@ struct _ViewHelperClass {
+ GType view_helper_get_type(void) G_GNUC_CONST;
+ 
+ ViewHelper *view_helper_new(void);
+-void view_helper_node_changed(ViewHelper *self);
+-void view_helper_repaint(ViewHelper *self);
++
+ void view_helper_draw(ViewHelper *self, cairo_t *cr, GdkRectangle *rect);
+ void view_helper_set_allocation(ViewHelper *self, GdkRectangle *allocation);
+ 
+diff --git a/gegl-gtk2-0.1.pc.in b/gegl-gtk2-0.1.pc.in
+deleted file mode 100644
+index c593480..0000000
+--- a/gegl-gtk2-0.1.pc.in
++++ /dev/null
+@@ -1,11 +0,0 @@
+-prefix=@prefix@
+-exec_prefix=@exec_prefix@
+-libdir=@libdir@
+-includedir=@includedir@
+-
+-Name: GEGL-GTK
+-Description: GTK+ UI convenience library for GEGL
+-Version: @GEGL_GTK_REAL_VERSION@
+-Requires: gtk+-2.0 gegl babl
+-Libs: -L${libdir} -l@PACKAGE_NAME@2-@GEGL_GTK_API_VERSION@
+-Cflags: -I${includedir}/@PACKAGE_NAME@2-@GEGL_GTK_API_VERSION@
+diff --git a/gegl-gtk3-0.1.pc.in b/gegl-gtk3-0.1.pc.in
+deleted file mode 100644
+index 437b00a..0000000
+--- a/gegl-gtk3-0.1.pc.in
++++ /dev/null
+@@ -1,11 +0,0 @@
+-prefix=@prefix@
+-exec_prefix=@exec_prefix@
+-libdir=@libdir@
+-includedir=@includedir@
+-
+-Name: GEGL-GTK
+-Description: GTK+ UI convenience library for GEGL
+-Version: @GEGL_GTK_REAL_VERSION@
+-Requires: gtk+-3.0 gegl babl
+-Libs: -L${libdir} -l@PACKAGE_NAME@3-@GEGL_GTK_API_VERSION@
+-Cflags: -I${includedir}/@PACKAGE_NAME@3-@GEGL_GTK_API_VERSION@
+diff --git a/operations/gegl-gtk-display.c b/operations/gegl-gtk-display.c
+index 2b8d342..d17576d 100644
+--- a/operations/gegl-gtk-display.c
++++ b/operations/gegl-gtk-display.c
+@@ -145,13 +145,24 @@ gegl_chant_class_init(GeglChantClass *klass)
+     G_OBJECT_CLASS(klass)->dispose = dispose;
+ 
+ #ifdef HAVE_GTK2
+-    operation_class->name        = "gegl-gtk2:display";
++#define OPERATION_NAME "gegl-gtk2:display"
+ #else
+-    operation_class->name        = "gegl-gtk3:display";
++#define OPERATION_NAME "gegl-gtk3:display"
+ #endif
++
++#if GEGL_MINOR_VERSION >= 2 && GEGL_MICRO_VERSION >= 0
++    gegl_operation_class_set_keys (operation_class,
++        "name", OPERATION_NAME ,
++        "categories", "output",
++        "description", _("Displays the input buffer in an GTK window ."),
++        NULL);
++#else /* GEGL < 0.2.0 */
++    operation_class->name        = OPERATION_NAME;
+     operation_class->categories  = "output";
+     operation_class->description =
+         _("Displays the input buffer in an GTK window .");
++#endif
++
+ }
+ 
+ #endif
+diff --git a/tests/test-view-helper.c b/tests/test-view-helper.c
+index addb14c..f23cfa1 100644
+--- a/tests/test-view-helper.c
++++ b/tests/test-view-helper.c
+@@ -61,11 +61,50 @@ static void
+ teardown_helper_test(ViewHelperTest *test)
+ {
+     g_object_unref(test->graph);
+-    gegl_buffer_destroy(test->buffer);
++    g_object_unref(test->buffer);
+     g_object_unref(test->helper);
+ }
+ 
+ 
++static void
++computed_event(GeglNode      *node,
++               GeglRectangle *rect,
++               gpointer       data)
++{
++    gboolean *got_computed = (gboolean *)data;
++    *got_computed = TRUE;
++}
++
++/* Test that the GeglNode is processed when invalidated. */
++static void
++test_processing(void)
++{
++    ViewHelperTest test;
++    gboolean got_computed_event = FALSE;
++    GeglRectangle invalidated_rect = {0, 0, 128, 128};
++
++    setup_helper_test(&test);
++    /* Setup will invalidate the node, make sure those events are processed. */
++    while (gtk_events_pending()) {
++        gtk_main_iteration();
++    }
++    gegl_node_process(test.out);
++
++    g_signal_connect(test.out, "computed",
++                     G_CALLBACK(computed_event),
++                     &got_computed_event);
++
++    gegl_node_invalidated(test.out, &invalidated_rect, FALSE);
++
++    g_timeout_add(300, test_utils_quit_gtk_main, NULL);
++    gtk_main();
++
++    /* FIXME: test that the computed events span the invalidated area */
++    g_assert(got_computed_event);
++
++    teardown_helper_test(&test);
++}
++
+ typedef struct {
+     gboolean needs_redraw_called;
+     GeglRectangle *expected_result;
+@@ -81,39 +120,37 @@ needs_redraw_event(ViewHelper *helper,
+     g_assert(test_utils_compare_rect(rect, data->expected_result));
+ }
+ 
++
+ /* Test that the redraw signal is emitted when the GeglNode has been computed.
+  *
+  * NOTE: Does not test that the actual drawing happens, or even
+  * that queue_redraw is called, as this is hard to observe reliably
+  * Redraws can be triggered by other things, and the exposed events
+- * can be coalesced. */
++ * can be coalesced by GTK. */
+ static void
+-test_redraw_on_computed(void)
++test_redraw_on_computed (int x, int y, float scale,
++                         GeglRectangle *input, GeglRectangle *output)
+ {
+     ViewHelperTest test;
+-    GeglRectangle computed_rect = {0, 0, 128, 128};
+     RedrawTestState test_data;
+-    test_data.needs_redraw_called = FALSE;
+-    test_data.expected_result = &computed_rect;
++    test_data.expected_result = output;
+ 
+     setup_helper_test(&test);
+     /* Setup will invalidate the node, make sure those events are processed. */
+     while (gtk_events_pending()) {
+         gtk_main_iteration();
+     }
+-    gegl_node_process(test.out);
++    gegl_node_process (test.out);
+ 
+-    g_assert(IS_VIEW_HELPER(test.helper));
++    view_helper_set_x(test.helper, x);
++    view_helper_set_y(test.helper, y);
++    view_helper_set_scale(test.helper, scale);
+ 
+-    /* TODO: when adding tests for transformed cases,
+-     * split out a function for testing the redrawn area, given
+-     * the input area and the transformation (translation, scaling, rotation) */
+     g_signal_connect(G_OBJECT(test.helper), "redraw-needed",
+-                     G_CALLBACK(needs_redraw_event),
+-                     &test_data);
++                      G_CALLBACK(needs_redraw_event),
++                      &test_data);
+ 
+-
+-    g_signal_emit_by_name(test.out, "computed", &computed_rect, NULL);
++    g_signal_emit_by_name(test.out, "computed", input, NULL);
+ 
+     g_timeout_add(300, test_utils_quit_gtk_main, NULL);
+     gtk_main();
+@@ -123,17 +160,52 @@ test_redraw_on_computed(void)
+     teardown_helper_test(&test);
+ }
+ 
++static void
++test_redraw_basic()
++{
++    GeglRectangle computed_rect = {0, 0, 128, 128};
++    GeglRectangle redraw_rect = {0, 0, 128, 128};
++    test_redraw_on_computed (0, 0, 1.0, &computed_rect, &redraw_rect);
++}
++
++static void
++test_redraw_translated()
++{
++    GeglRectangle computed_rect = {0, 0, 128, 128};
++    GeglRectangle redraw_rect = {-11, -11, 128, 128};
++    test_redraw_on_computed (11, 11, 1.0, &computed_rect, &redraw_rect);
++}
++
++static void
++test_redraw_scaled()
++{
++    GeglRectangle computed_rect = {0, 0, 128, 128};
++    GeglRectangle redraw_rect = {0, 0, 256, 256};
++    test_redraw_on_computed (0, 0, 2.0, &computed_rect, &redraw_rect);
++}
++
++static void
++test_redraw_combined()
++{
++    GeglRectangle computed_rect = {0, 0, 128, 128};
++    GeglRectangle redraw_rect = {10, 10, 256, 256};
++    test_redraw_on_computed (-10, -10, 2.0, &computed_rect, &redraw_rect);
++}
++
+ int
+ main(int argc, char **argv)
+ {
+ 
+     int retval = -1;
+ 
+-    g_thread_init(NULL);
+     gegl_init(&argc, &argv);
+     g_test_init(&argc, &argv, NULL);
+ 
+-    g_test_add_func("/widgets/view/helper/redraw-on-computed", test_redraw_on_computed);
++    g_test_add_func("/widgets/view/helper/processing", test_processing);
++    g_test_add_func("/widgets/view/redraw-basic", test_redraw_basic);
++    g_test_add_func("/widgets/view/redraw-scaled", test_redraw_scaled);
++    g_test_add_func("/widgets/view/redraw-translated", test_redraw_translated);
++    g_test_add_func("/widgets/view/redraw-combined", test_redraw_combined);
+ 
+     retval = g_test_run();
+     gegl_exit();
+diff --git a/tests/test-view.c b/tests/test-view.c
+index 8eee89f..e62a319 100644
+--- a/tests/test-view.c
++++ b/tests/test-view.c
+@@ -63,7 +63,7 @@ static void
+ teardown_widget_test(ViewWidgetTest *test)
+ {
+     g_object_unref(test->graph);
+-    gegl_buffer_destroy(test->buffer);
++    g_object_unref(test->buffer);
+     gtk_widget_destroy(test->window);
+ }
+ 
+@@ -83,53 +83,7 @@ test_sanity(void)
+     teardown_widget_test(&test);
+ }
+ 
+-
+-static void
+-computed_event(GeglNode      *node,
+-               GeglRectangle *rect,
+-               gpointer       data)
+-{
+-    gboolean *got_computed = (gboolean *)data;
+-    *got_computed = TRUE;
+-}
+-
+-/* Test that the GeglNode is processed when invalidated. */
+-static void
+-test_processing(void)
+-{
+-    ViewWidgetTest test;
+-    gboolean got_computed_event = FALSE;
+-    GeglRectangle invalidated_rect = {0, 0, 128, 128};
+-
+-    setup_widget_test(&test);
+-    /* Setup will invalidate the node, make sure those events are processed. */
+-    while (gtk_events_pending()) {
+-        gtk_main_iteration();
+-    }
+-    gegl_node_process(test.out);
+-
+-    g_signal_connect(test.out, "computed",
+-                     G_CALLBACK(computed_event),
+-                     &got_computed_event);
+-
+-    g_signal_emit_by_name(test.out, "invalidated", &invalidated_rect, NULL);
+-
+-    g_timeout_add(300, test_utils_quit_gtk_main, NULL);
+-    gtk_main();
+-
+-    /* FIXME: test that the computed events span the invalidated area */
+-    g_assert(got_computed_event);
+-
+-    teardown_widget_test(&test);
+-}
+-
+-
+-
+ /* TODO:
+- * - Test redraw with translation
+- * - Test redraw with scaling
+- * - Test redraw with rotation
+- * Benchmarks for cases above
+  * Actual drawing tests, checking the output of the widget against a
+  * well known reference. Ideally done with a fake/dummy windowing backend,
+  * so it can be done quickly, without external influences.
+@@ -150,13 +104,11 @@ main(int argc, char **argv)
+         return 0;
+     }
+ 
+-    g_thread_init(NULL);
+     gtk_init(&argc, &argv);
+     gegl_init(&argc, &argv);
+     g_test_init(&argc, &argv, NULL);
+ 
+     g_test_add_func("/widgets/view/sanity", test_sanity);
+-    g_test_add_func("/widgets/view/processing", test_processing);
+ 
+     retval = g_test_run();
+     gegl_exit();
