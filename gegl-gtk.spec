@@ -14,7 +14,7 @@ Summary:	Utility library for using GEGL in GTK+ based applications
 Summary(pl.UTF-8):	Biblioteka narzędziowa do używania biblioteki GEGL w aplikacjach opartych na GTK+
 Name:		gegl-gtk
 Version:	0.0.7
-Release:	3
+Release:	4
 License:	LGPL v3+
 Group:		Libraries
 Source0:	ftp://ftp.gimp.org/pub/gegl-gtk/0.0/%{name}-%{version}.tar.bz2
